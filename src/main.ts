@@ -11,6 +11,11 @@ async function bootstrap() {
   // Create a logger instance
   const logger = new LoggerService().setContext('Bootstrap');
   
+  // Log startup information
+  logger.log('Starting MusicGPT Backend...');
+  logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.log(`Port: ${process.env.PORT || 3000}`);
+  
   try {
     // Create the NestJS application with Winston logger
     const app = await NestFactory.create(AppModule, {
@@ -61,12 +66,30 @@ async function bootstrap() {
     SwaggerModule.setup('api', app, document);
     logger.log('Swagger documentation initialized');
 
+    // Get port from environment variable or default to 3000
+    const port = process.env.PORT || 3000;
+    
     // Start the server
-    await app.listen(3000);
-    logger.log('🚀 Application is running on: http://localhost:3000');
-    logger.log('📚 API Documentation available at: http://localhost:3000/api');
+    await app.listen(port, '0.0.0.0');
+    logger.log(`🚀 Application is running on: http://0.0.0.0:${port}`);
+    logger.log(`📚 API Documentation available at: http://0.0.0.0:${port}/api`);
+    
+    // Graceful shutdown handling
+    process.on('SIGTERM', async () => {
+      logger.log('SIGTERM received, shutting down gracefully...');
+      await app.close();
+      process.exit(0);
+    });
+    
+    process.on('SIGINT', async () => {
+      logger.log('SIGINT received, shutting down gracefully...');
+      await app.close();
+      process.exit(0);
+    });
+    
   } catch (error) {
     logger.error(`Error starting server: ${error.message}`, error.stack);
+    logger.error('Stack trace:', error.stack);
     process.exit(1);
   }
 }
