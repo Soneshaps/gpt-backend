@@ -1,0 +1,40 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+model Voice {
+  id            String @id @default(cuid())
+  name          String
+  language      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  speechRequests SpeechRequest[]
+
+  @@map("voices")
+}
+
+model SpeechRequest {
+  id            String   @id @default(cuid())
+  prompt        String
+  type          String   // e.g., "text-to-speech", "song", etc.
+  lyrics        String?  // Optional lyrics field
+  songMode      String?  // 'lyrics' | 'instrumental' | null
+  fileUrl       String?  // URL to the uploaded audio file
+  status        String   @default("pending") // e.g., "pending", "processing", "completed", "failed"
+  voiceId       String?  // Optional reference to Voice
+  voice         Voice?   @relation(fields: [voiceId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("speech_requests")
+}

@@ -1,0 +1,58 @@
+# Use the official Node.js LTS image as the base
+FROM node:lts
+
+# Create and set the working directory inside the container
+WORKDIR /app
+
+# Copy package.json and package-lock.json (or yarn.lock) to install dependencies
+COPY package.json ./
+# If using pnpm, copy pnpm-lock.yaml and use pnpm install
+# COPY pnpm-lock.yaml ./
+# RUN corepack enable && pnpm fetch --frozen-lockfile && pnpm install --frozen-lockfile
+
+# Install dependencies
+RUN npm install --production=false # Install all modules, including devDependencies for build
+
+# Copy the rest of the application code
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build the NestJS application
+RUN npm run build
+
+# Use a smaller base image for the final production image
+FROM node:lts-alpine
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create app user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
+
+WORKDIR /app
+
+# Copy only necessary files for production
+COPY --from=0 /app/node_modules /app/node_modules
+COPY --from=0 /app/dist /app/dist
+COPY --from=0 /app/prisma /app/prisma
+COPY package.json ./
+
+# Set ownership to the nestjs user
+RUN chown -R nestjs:nodejs /app
+
+# Switch to non-root user
+USER nestjs
+
+# Set the environment variable for the port and expose it
+ENV PORT=3000
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start the NestJS application
+CMD ["dumb-init", "node", "dist/src/main.js"]
